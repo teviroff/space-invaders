@@ -39,6 +39,8 @@ const assets = new Assets();
 class Player extends GameObject {
     public bullets: Bullet[] = [];
     private maxBullets = 5;
+    private lastShot: number = 0;
+    private shotIntervalMs = 100;
 
     private rightPressed = false;
     private leftPressed = false;
@@ -62,8 +64,11 @@ class Player extends GameObject {
         if (this.leftPressed && this.x > 0) {
             this.x -= this.speed;
         }
-        if (this.spacePressed && this.bullets.length < this.maxBullets) {
-            this.bullets.push(new Bullet(this.x, this.y));
+        if (this.spacePressed && this.bullets.length < this.maxBullets &&
+            Date.now() - this.lastShot >= this.shotIntervalMs
+        ) {
+            this.bullets.push(new Bullet(this.x + this.width / 2, this.y));
+            this.lastShot = Date.now();
         }
     }
 
