@@ -253,8 +253,8 @@ let waveDifficulty: WaveDifficulty = 0;
 function increaseDifficulty() {
     if (waveDifficulty === 3) {
         Invader.invaderSpeed *= 1.25;
-        Object.values(Invader.healths).forEach((health) => health *= 2);
-        Object.values(Invader.scoreRewards).forEach((scoreReward) => scoreReward *= 2);
+        Object.keys(Invader.healths).forEach((name) => Invader.healths[name] *= 2);
+        Object.keys(Invader.scoreRewards).forEach((name) => Invader.scoreRewards[name] *= 2);
         waveDifficulty = 1;
         stage += 1;
         stageElement.innerText = `Stage: ${stage}`;
