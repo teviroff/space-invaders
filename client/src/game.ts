@@ -14,6 +14,10 @@ abstract class GameObject {
     abstract update(): void;
     abstract needsDeletion(): boolean;
 
+    center(): { x: number, y: number } {
+        return { x: this.x + this.width / 2, y: this.y + this.height / 2 };
+    }
+
     collidesWith(object: GameObject): boolean {
         return this.x < object.x + object.width &&
             this.x + this.width > object.x &&
@@ -22,25 +26,36 @@ abstract class GameObject {
     }
 }
 
+interface BulletTarget extends GameObject {
+    getId(): string;
+    decreaseHealth(damage: number): void;
+}
+
 class Assets {
     public invaderRed = new Image(40, 32);
     public invaderYellow = new Image(40, 32);
     public invaderGreen = new Image(40, 32);
+    public upgrade = new Image(34, 46);
 
     constructor() {
         this.invaderRed.src = '/static/assets/invaderRed.png';
         this.invaderYellow.src = '/static/assets/invaderYellow.png';
         this.invaderGreen.src = '/static/assets/invaderGreen.png';
+        this.upgrade.src = '/static/assets/lightning.png';
     }
 }
 
 const assets = new Assets();
 
 class Player extends GameObject {
+    public static minShotIntervalMs = 20;
+
     public bullets: Bullet[] = [];
-    private maxBullets = 5;
+    private maxBullets = 4;
+    private bulletDamage = 1;
+    private bulletPenetrations = 1;
     private lastShot: number = 0;
-    private shotIntervalMs = 100;
+    private shotIntervalMs = 150;
 
     private rightPressed = false;
     private leftPressed = false;
@@ -67,7 +82,10 @@ class Player extends GameObject {
         if (this.spacePressed && this.bullets.length < this.maxBullets &&
             Date.now() - this.lastShot >= this.shotIntervalMs
         ) {
-            this.bullets.push(new Bullet(this.x + this.width / 2, this.y));
+            this.bullets.push(
+                new Bullet(this.x + this.width / 2, this.y,
+                    this.bulletDamage, this.bulletPenetrations + 1)
+            );
             this.lastShot = Date.now();
         }
     }
@@ -87,14 +105,112 @@ class Player extends GameObject {
             this.spacePressed = isPressed;
         }
     }
+
+    increaseShotSpeed() {
+        this.shotIntervalMs = (this.shotIntervalMs - Player.minShotIntervalMs) * 0.8
+            + Player.minShotIntervalMs;
+    }
+
+    addBulletPenetration() {
+        this.bulletPenetrations += 1;
+    }
+
+    addBulletDamage() {
+        this.bulletDamage += 2;
+    }
+
+    addMaxBullets() {
+        this.maxBullets += 2;
+    }
+}
+
+const upgradeTypes = [
+    () => player.increaseShotSpeed(),
+    () => player.addBulletPenetration(),
+    () => player.addBulletDamage(),
+    () => player.addMaxBullets(),
+];
+
+function getRandomInt(min: number, max: number): number {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min)) + min;
+}
+
+class Upgrade extends GameObject implements BulletTarget {
+    public static upgradeWidth = 34;
+    public static upgradeHeight = 46;
+    public static upgradeSpeed = 1;
+    public static healthbarHeight = 4;
+    public static upgradeHealth = 2;
+    public static upgradesPerStage = 2;
+    public static upgradesCollected = 0;
+
+    private id: string;
+    private type: number;
+    private health: number;
+
+    constructor(x: number, y: number) {
+        super(x - Upgrade.upgradeWidth / 2, y - Upgrade.upgradeHeight / 2,
+            Upgrade.upgradeWidth, Upgrade.upgradeHeight, Upgrade.upgradeSpeed);
+        this.id = uuid();
+        this.type = getRandomInt(0, upgradeTypes.length);
+        this.health = Upgrade.upgradeHealth;
+    }
+
+    getId(): string {
+        return this.id;
+    }
+
+    draw(ctx: CanvasRenderingContext2D) {
+        ctx.drawImage(assets.upgrade, this.x, this.y);
+    }
+
+    drawUI(ctx: CanvasRenderingContext2D): void {
+        const healthRatio = this.health / Upgrade.upgradeHealth;
+        if (healthRatio === 1. || healthRatio <= 0) {
+            return;
+        }
+        const gradient = ctx.createLinearGradient(this.x, this.y - 2,
+            this.x + this.width, this.y - 2);
+        gradient.addColorStop(0, 'green');
+        gradient.addColorStop(healthRatio, 'green');
+        gradient.addColorStop(healthRatio, 'black');
+        gradient.addColorStop(1, 'black');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(this.x, this.y - 2 - Upgrade.healthbarHeight,
+            this.width, Upgrade.healthbarHeight);
+        ctx.fillStyle = '#000';
+    }
+
+    update(): void {
+        this.y += this.speed;
+    }
+
+    needsDeletion(): boolean {
+        return this.health <= 0 || this.y > canvas.height;
+    }
+
+    decreaseHealth(damage: number) {
+        this.health -= damage;
+    }
+
+    tryApplyEffect() {
+        if (this.health > 0) {
+            return;
+        }
+        upgradeTypes[this.type]();
+        Upgrade.upgradesCollected += 1;
+    }
 }
 
 type InvaderType = 'green' | 'yellow' | 'red';
 
-class Invader extends GameObject {
+class Invader extends GameObject implements BulletTarget {
     public static invaderWidth = 40;
     public static invaderHeight = 32;
     public static invaderSpeed = 2.5;
+    public static invaderMaxSpeed = 4;
     private static healthbarHeight = 4;
     public static healths: { [type in InvaderType]: number } = {
         green: 2,
@@ -212,18 +328,22 @@ class Bullet extends GameObject {
         return this.leftCollisions == 0 || this.y < 0;
     }
 
+    checkCollision(target: BulletTarget) {
+        if (this.collidesWith(target) && !this.collidedWith.has(target.getId())) {
+            target.decreaseHealth(this.damage);
+            this.collidedWith.add(target.getId());
+            this.leftCollisions -= 1;
+        }
+    }
+
     checkCollisions() {
         if (this.leftCollisions == 0) {
             return;
         }
-        for (let invader of invaders) {
-            if (this.collidesWith(invader) && !this.collidedWith.has(invader.getId())) {
-                invader.decreaseHealth(this.damage);
-                this.collidedWith.add(invader.getId());
-                this.leftCollisions -= 1;
-                if (this.leftCollisions == 0) {
-                    break;
-                }
+        for (let target of [...invaders, ...upgrades]) {
+            this.checkCollision(target);
+            if (this.leftCollisions == 0) {
+                break;
             }
         }
     }
@@ -243,18 +363,25 @@ let waveDefeatTime = 0;
 
 const player = new Player(canvas.width / 2 - 25, canvas.height - 30);
 const invaders: Invader[] = [];
+const upgrades: Upgrade[] = [];
 const bullets = player.bullets;
 
-type WaveDifficulty = 0 | 1 | 2 | 3;
+type WaveDifficulty = 1 | 2 | 3;
 
 let stage: number = 1;
-let waveDifficulty: WaveDifficulty = 0;
+let waveDifficulty: WaveDifficulty | null = null;
 
 function increaseDifficulty() {
+    if (waveDifficulty === null) {
+        waveDifficulty = 1;
+        return;
+    }
     if (waveDifficulty === 3) {
-        Invader.invaderSpeed *= 1.25;
+        Invader.invaderSpeed = Math.min(Invader.invaderSpeed * 1.25, Invader.invaderMaxSpeed);
         Object.keys(Invader.healths).forEach((name) => Invader.healths[name] *= 2);
         Object.keys(Invader.scoreRewards).forEach((name) => Invader.scoreRewards[name] *= 2);
+        Upgrade.upgradeHealth += 3;
+        Upgrade.upgradesCollected = 0;
         waveDifficulty = 1;
         stage += 1;
         stageElement.innerText = `Stage: ${stage}`;
@@ -266,99 +393,300 @@ function increaseDifficulty() {
 type InvaderConfig = {
     type: InvaderType,
     direction: 'left' | 'right',
-};
+} | null;
 
-const configs: { [key: string]: InvaderConfig[][] } = {
-    easy_stage_one: [[
-        { type: 'green', direction: 'left' },
-        { type: 'yellow', direction: 'left' },
-        { type: 'green', direction: 'left' },
-        { type: 'yellow', direction: 'left' },
-        { type: 'green', direction: 'right' },
-        { type: 'yellow', direction: 'right' },
-        { type: 'green', direction: 'right' },
-    ]],
-    normal_stage_one: [[
-        { type: 'yellow', direction: 'left' },
-        { type: 'green', direction: 'left' },
-        { type: 'red', direction: 'left' },
-        { type: 'green', direction: 'left' },
-        { type: 'yellow', direction: 'left' },
-        { type: 'yellow', direction: 'right' },
-        { type: 'green', direction: 'right' },
-        { type: 'red', direction: 'right' },
-        { type: 'green', direction: 'right' },
-        { type: 'yellow', direction: 'right' },
-    ]],
-    hard_stage_one: [[
-        { type: 'red', direction: 'left' },
-        { type: 'yellow', direction: 'left' },
-        { type: 'red', direction: 'left' },
-        { type: 'yellow', direction: 'left' },
-        { type: 'red', direction: 'left' },
-        { type: 'yellow', direction: 'right' },
-        { type: 'red', direction: 'right' },
-        { type: 'yellow', direction: 'right' },
-        { type: 'red', direction: 'right' },
-        { type: 'yellow', direction: 'right' },
-    ]],
-    easy_stage_three: [
-        [
-            { type: 'red', direction: 'left' },
-            { type: 'red', direction: 'left' },
-            { type: 'red', direction: 'left' },
+const configs: { [key in WaveDifficulty]: InvaderConfig[][] }[] = [
+    {
+        1: [
+            [
+                { type: 'green', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'green', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'green', direction: 'right' },
+            ]
         ],
-        [
-            { type: 'yellow', direction: 'right' },
-            { type: 'yellow', direction: 'right' },
-            { type: 'yellow', direction: 'right' },
+        2: [
+            [
+                { type: 'yellow', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'green', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'green', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+            ]
         ],
-        [
-            { type: 'green', direction: 'left' },
-            { type: 'green', direction: 'left' },
-            { type: 'green', direction: 'left' },
+        3: [
+            [
+                { type: 'red', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+            ]
         ],
-    ],
-    normal_stage_three: [
-        [
-            { type: 'red', direction: 'left' },
-            { type: 'yellow', direction: 'left' },
-            { type: 'red', direction: 'left' },
-            { type: 'yellow', direction: 'left' },
-            { type: 'red', direction: 'left' },
+    },
+    {
+        1: [
+            [
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+            ],
+            [
+                { type: 'yellow', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+            ],
+            [
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+            ],
         ],
-        [
-            { type: 'red', direction: 'right' },
-            { type: 'yellow', direction: 'right' },
-            { type: 'red', direction: 'right' },
-            { type: 'yellow', direction: 'right' },
-            { type: 'red', direction: 'right' },
+        2: [
+            [
+                { type: 'red', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'red', direction: 'left' },
+            ],
+            [
+                { type: 'red', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'red', direction: 'right' },
+            ],
         ],
-    ],
-    hard_stage_three: [
-        [
-            { type: 'red', direction: 'left' },
-            { type: 'red', direction: 'left' },
-            { type: 'red', direction: 'left' },
+        3: [
+            [
+                null,
+                null,
+                { type: 'red', direction: 'left' },
+                null,
+                { type: 'red', direction: 'left' },
+                null,
+                null,
+            ],
+            [
+                null,
+                { type: 'red', direction: 'left' },
+                null,
+                { type: 'red', direction: 'left' },
+                null,
+                { type: 'red', direction: 'left' },
+                null,
+            ],
+            [
+                null,
+                null,
+                { type: 'red', direction: 'left' },
+                null,
+                { type: 'red', direction: 'left' },
+                null,
+                null,
+            ],
         ],
-        [
-            { type: 'red', direction: 'left' },
-            { type: 'red', direction: 'left' },
-            { type: 'red', direction: 'left' },
+    },
+    {
+        1: [
+            [
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+            ],
+            [
+                { type: 'green', direction: 'right' },
+                { type: 'green', direction: 'right' },
+                { type: 'green', direction: 'right' },
+                { type: 'green', direction: 'right' },
+                { type: 'green', direction: 'right' },
+            ],
+            [
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+                { type: 'green', direction: 'left' },
+            ],
         ],
-        [
-            { type: 'red', direction: 'left' },
-            { type: 'red', direction: 'left' },
-            { type: 'red', direction: 'left' },
+        2: [
+            [
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+            ],
+            [
+                { type: 'yellow', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+                { type: 'yellow', direction: 'right' },
+            ],
+            [
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+            ],
         ],
-    ],
-};
+        3: [
+            [
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+            ],
+            [
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+            ],
+            [
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+            ],
+        ],
+    },
+    {
+        1: [
+            [],
+            [],
+            [
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+            ],
+            [
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+                null,
+                { type: 'green', direction: 'left' },
+            ],
+        ],
+        2: [
+            [
+                null,
+                null,
+                null,
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                null,
+                null,
+                null,
+            ],
+            [
+                null,
+                null,
+                null,
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                null,
+                null,
+                null,
+            ],
+            [
+                null,
+                null,
+                null,
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                null,
+                null,
+                null,
+            ],
+            [
+                null,
+                null,
+                null,
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                { type: 'yellow', direction: 'left' },
+                null,
+                null,
+                null,
+            ],
+        ],
+        3: [
+            [
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+                { type: 'red', direction: 'left' },
+            ],
+            [
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+                { type: 'red', direction: 'right' },
+            ],
+        ],
+    }
+];
 
 function spawnInvadersWithConfig(config: InvaderConfig[][]) {
     config.forEach((layer, layer_index) => {
         const spacing = (canvas.width - layer.length * Invader.invaderWidth)
             / (layer.length + 1);
         layer.forEach((config, index) => {
+            if (config === null) {
+                return;
+            }
             const offset = spacing * (index + 1) + Invader.invaderWidth * index;
             invaders.push(new Invader(offset, layer_index * Invader.invaderHeight,
                 config.direction, config.type));
@@ -368,31 +696,11 @@ function spawnInvadersWithConfig(config: InvaderConfig[][]) {
 
 function generateWave() {
     increaseDifficulty();
-    switch (waveDifficulty) {
-        case 1: {
-            if (stage < 3) {
-                spawnInvadersWithConfig(configs.easy_stage_one);
-            } else {
-                spawnInvadersWithConfig(configs.easy_stage_three);
-            }
-            break;
-        }
-        case 2: {
-            if (stage < 3) {
-                spawnInvadersWithConfig(configs.normal_stage_one);
-            } else {
-                spawnInvadersWithConfig(configs.normal_stage_three);
-            }
-            break;
-        }
-        case 3: {
-            if (stage < 3) {
-                spawnInvadersWithConfig(configs.hard_stage_one);
-            } else {
-                spawnInvadersWithConfig(configs.hard_stage_three);
-            }
-            break;
-        }
+    if (stage <= configs.length) {
+        spawnInvadersWithConfig(configs[stage - 1][waveDifficulty]);
+    } else {
+        const index = 1 + ((stage - 1) % (configs.length - 1));
+        spawnInvadersWithConfig(configs[index][waveDifficulty]);
     }
 }
 
@@ -410,6 +718,11 @@ function gameLoop() {
             if (invader.needsDeletion()) {
                 invaders.splice(index, 1);
                 score += invader.getScoreReward();
+                if (upgrades.length + Upgrade.upgradesCollected < Upgrade.upgradesPerStage &&
+                    getRandomInt(0, 10) === 0) {
+                    const { x, y } = invader.center();
+                    upgrades.push(new Upgrade(x, y));
+                }
                 scoreElement.innerText = `Score: ${score}`;
             } else {
                 invader.update();
@@ -426,12 +739,22 @@ function gameLoop() {
             bullet.update();
         }
     });
+    upgrades.forEach((upgrade, index) => {
+        if (upgrade.needsDeletion()) {
+            upgrades.splice(index, 1);
+            upgrade.tryApplyEffect();
+        } else {
+            upgrade.update();
+        }
+    });
 
     // Draw objects
     player.draw(ctx);
     invaders.forEach(invader => invader.draw(ctx));
     bullets.forEach(bullet => bullet.draw(ctx));
+    upgrades.forEach(upgrade => upgrade.draw(ctx));
     invaders.forEach(invader => invader.drawUI(ctx));
+    upgrades.forEach(upgrade => upgrade.drawUI(ctx));
 
     // Game over condition
     if (invaders.some(invader => invader.y + invader.height >= player.y)) {
