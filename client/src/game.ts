@@ -92,21 +92,28 @@ class Player extends GameObject {
 type InvaderType = 'green' | 'yellow' | 'red';
 
 class Invader extends GameObject {
-    private static invaderWidth = 40;
-    private static invaderHeight = 32;
+    public static invaderWidth = 40;
+    public static invaderHeight = 32;
+    public static invaderSpeed = 2.5;
     private static healthbarHeight = 4;
     public static healths: { [type in InvaderType]: number } = {
         green: 2,
         yellow: 3,
         red: 4,
-    }
+    };
+    public static scoreRewards: { [type in InvaderType]: number } = {
+        green: 10,
+        yellow: 20,
+        red: 30,
+    };
 
     private id: string;
     private type: InvaderType;
     private health: number;
 
-    constructor(x: number, y: number, type: InvaderType = 'green') {
-        super(x, y, Invader.invaderWidth, Invader.invaderHeight, 1);
+    constructor(x: number, y: number, direction: 'left' | 'right', type: InvaderType = 'green') {
+        super(x, y, Invader.invaderWidth, Invader.invaderHeight,
+            direction === 'right' ? Invader.invaderSpeed : -Invader.invaderSpeed);
         this.id = uuid();
         this.type = type;
         this.health = Invader.healths[type];
@@ -152,6 +159,15 @@ class Invader extends GameObject {
 
     update() {
         this.x += this.speed;
+        if (this.x < 0) {
+            this.x = 0;
+            this.speed *= -1;
+            this.y += Invader.invaderHeight;
+        } else if (this.x + this.width > canvas.width) {
+            this.x = canvas.width - this.width;
+            this.speed *= -1;
+            this.y += Invader.invaderHeight;
+        }
     }
 
     needsDeletion(): boolean {
@@ -160,6 +176,10 @@ class Invader extends GameObject {
 
     decreaseHealth(damage: number) {
         this.health -= damage;
+    }
+
+    getScoreReward(): number {
+        return Invader.scoreRewards[this.type];
     }
 }
 
@@ -209,37 +229,196 @@ class Bullet extends GameObject {
     }
 }
 
-const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
-const scoreElement = document.getElementById('score')!;
+const scoreElement = document.getElementById('game-score') as HTMLParagraphElement;
+const stageElement = document.getElementById('game-stage') as HTMLParagraphElement;
+const overlayElement = document.getElementById('game-overlay-container') as HTMLDivElement;
+const startButton = document.getElementById('game-start-button') as HTMLButtonElement;
 
 let score = 0;
+
+const waveIntervalMs = 5000;
+let waveDefeatTime = 0;
+
 const player = new Player(canvas.width / 2 - 25, canvas.height - 30);
 const invaders: Invader[] = [];
 const bullets = player.bullets;
 
-// Create invaders grid
-for (let i = 0; i < 5; i++) {
-    for (let j = 0; j < 10; j++) {
-        invaders.push(new Invader(50 + j * 50, 50 + i * 40));
+type WaveDifficulty = 0 | 1 | 2 | 3;
+
+let stage: number = 1;
+let waveDifficulty: WaveDifficulty = 0;
+
+function increaseDifficulty() {
+    if (waveDifficulty === 3) {
+        Invader.invaderSpeed *= 1.25;
+        Object.values(Invader.healths).forEach((health) => health *= 2);
+        Object.values(Invader.scoreRewards).forEach((scoreReward) => scoreReward *= 2);
+        waveDifficulty = 1;
+        stage += 1;
+        stageElement.innerText = `Stage: ${stage}`;
+        return;
     }
+    waveDifficulty += 1;
 }
 
-document.addEventListener('keydown', (e) => player.keyHandler(e, true));
-document.addEventListener('keyup', (e) => player.keyHandler(e, false));
+type InvaderConfig = {
+    type: InvaderType,
+    direction: 'left' | 'right',
+};
+
+const configs: { [key: string]: InvaderConfig[][] } = {
+    easy_stage_one: [[
+        { type: 'green', direction: 'left' },
+        { type: 'yellow', direction: 'left' },
+        { type: 'green', direction: 'left' },
+        { type: 'yellow', direction: 'left' },
+        { type: 'green', direction: 'right' },
+        { type: 'yellow', direction: 'right' },
+        { type: 'green', direction: 'right' },
+    ]],
+    normal_stage_one: [[
+        { type: 'yellow', direction: 'left' },
+        { type: 'green', direction: 'left' },
+        { type: 'red', direction: 'left' },
+        { type: 'green', direction: 'left' },
+        { type: 'yellow', direction: 'left' },
+        { type: 'yellow', direction: 'right' },
+        { type: 'green', direction: 'right' },
+        { type: 'red', direction: 'right' },
+        { type: 'green', direction: 'right' },
+        { type: 'yellow', direction: 'right' },
+    ]],
+    hard_stage_one: [[
+        { type: 'red', direction: 'left' },
+        { type: 'yellow', direction: 'left' },
+        { type: 'red', direction: 'left' },
+        { type: 'yellow', direction: 'left' },
+        { type: 'red', direction: 'left' },
+        { type: 'yellow', direction: 'right' },
+        { type: 'red', direction: 'right' },
+        { type: 'yellow', direction: 'right' },
+        { type: 'red', direction: 'right' },
+        { type: 'yellow', direction: 'right' },
+    ]],
+    easy_stage_three: [
+        [
+            { type: 'red', direction: 'left' },
+            { type: 'red', direction: 'left' },
+            { type: 'red', direction: 'left' },
+        ],
+        [
+            { type: 'yellow', direction: 'right' },
+            { type: 'yellow', direction: 'right' },
+            { type: 'yellow', direction: 'right' },
+        ],
+        [
+            { type: 'green', direction: 'left' },
+            { type: 'green', direction: 'left' },
+            { type: 'green', direction: 'left' },
+        ],
+    ],
+    normal_stage_three: [
+        [
+            { type: 'red', direction: 'left' },
+            { type: 'yellow', direction: 'left' },
+            { type: 'red', direction: 'left' },
+            { type: 'yellow', direction: 'left' },
+            { type: 'red', direction: 'left' },
+        ],
+        [
+            { type: 'red', direction: 'right' },
+            { type: 'yellow', direction: 'right' },
+            { type: 'red', direction: 'right' },
+            { type: 'yellow', direction: 'right' },
+            { type: 'red', direction: 'right' },
+        ],
+    ],
+    hard_stage_three: [
+        [
+            { type: 'red', direction: 'left' },
+            { type: 'red', direction: 'left' },
+            { type: 'red', direction: 'left' },
+        ],
+        [
+            { type: 'red', direction: 'left' },
+            { type: 'red', direction: 'left' },
+            { type: 'red', direction: 'left' },
+        ],
+        [
+            { type: 'red', direction: 'left' },
+            { type: 'red', direction: 'left' },
+            { type: 'red', direction: 'left' },
+        ],
+    ],
+};
+
+function spawnInvadersWithConfig(config: InvaderConfig[][]) {
+    config.forEach((layer, layer_index) => {
+        const spacing = (canvas.width - layer.length * Invader.invaderWidth)
+            / (layer.length + 1);
+        layer.forEach((config, index) => {
+            const offset = spacing * (index + 1) + Invader.invaderWidth * index;
+            invaders.push(new Invader(offset, layer_index * Invader.invaderHeight,
+                config.direction, config.type));
+        });
+    });
+}
+
+function generateWave() {
+    increaseDifficulty();
+    switch (waveDifficulty) {
+        case 1: {
+            if (stage < 3) {
+                spawnInvadersWithConfig(configs.easy_stage_one);
+            } else {
+                spawnInvadersWithConfig(configs.easy_stage_three);
+            }
+            break;
+        }
+        case 2: {
+            if (stage < 3) {
+                spawnInvadersWithConfig(configs.normal_stage_one);
+            } else {
+                spawnInvadersWithConfig(configs.normal_stage_three);
+            }
+            break;
+        }
+        case 3: {
+            if (stage < 3) {
+                spawnInvadersWithConfig(configs.hard_stage_one);
+            } else {
+                spawnInvadersWithConfig(configs.hard_stage_three);
+            }
+            break;
+        }
+    }
+}
 
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Update objects
     player.update();
-    invaders.forEach((invader, index) => {
-        if (invader.needsDeletion()) {
-            invaders.splice(index, 1);
-        } else {
-            invader.update();
+    if (invaders.length === 0) {
+        if ((Date.now() - waveDefeatTime) > waveIntervalMs) {
+            generateWave();
         }
-    });
+    } else {
+        invaders.forEach((invader, index) => {
+            if (invader.needsDeletion()) {
+                invaders.splice(index, 1);
+                score += invader.getScoreReward();
+                scoreElement.innerText = `Score: ${score}`;
+            } else {
+                invader.update();
+            }
+        });
+        if (invaders.length === 0) {
+            waveDefeatTime = Date.now();
+        }
+    }
     bullets.forEach((bullet, index) => {
         if (bullet.needsDeletion()) {
             bullets.splice(index, 1);
@@ -247,21 +426,6 @@ function gameLoop() {
             bullet.update();
         }
     });
-
-    // Check invader wall collision
-    let changeDirection = false;
-    invaders.forEach(invader => {
-        if (invader.x <= 0 || invader.x + invader.width >= canvas.width) {
-            changeDirection = true;
-        }
-    });
-
-    if (changeDirection) {
-        invaders.forEach(invader => {
-            invader.speed *= -1;
-            invader.y += 20;
-        });
-    }
 
     // Draw objects
     player.draw(ctx);
@@ -271,13 +435,72 @@ function gameLoop() {
 
     // Game over condition
     if (invaders.some(invader => invader.y + invader.height >= player.y)) {
-        ctx.fillStyle = '#fff';
-        ctx.font = '48px Arial';
-        ctx.fillText('GAME OVER', canvas.width / 2 - 120, canvas.height / 2);
+        gameOver();
         return;
     }
 
     requestAnimationFrame(gameLoop);
 }
 
-gameLoop();
+async function submitRecord(username: string) {
+    const response = await fetch(
+        '/api/record',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                username: username,
+                score: score,
+            }),
+            headers: {
+                'Content-type': 'application/json; charset=UTF-8',
+            },
+        }
+    );
+    if (response.status === 200) {
+        location.href = '/scoreboard';
+        return;
+    }
+    alert('Failed to submit record');
+}
+
+function gameOver() {
+    overlayElement.classList.add('tint');
+    let gameOverContainer = document.createElement('div');
+    gameOverContainer.id = 'game-over-container';
+    let gameOverText = document.createElement('h3');
+    gameOverText.innerText = 'Game over!';
+    gameOverText.classList.add('text-white');
+    gameOverContainer.appendChild(gameOverText);
+    let nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Username';
+    gameOverContainer.appendChild(nameInput);
+    let submitButton = document.createElement('button');
+    submitButton.innerText = 'Submit';
+    submitButton.classList.add('text-href');
+    submitButton.classList.add('text-bolder');
+    submitButton.disabled = true;
+    gameOverContainer.appendChild(submitButton);
+    submitButton.addEventListener('click', () => {
+        submitButton.disabled = true;
+        submitRecord(nameInput.value);
+    });
+    nameInput.addEventListener('input', () => {
+        if (nameInput.value.match(/^[A-Za-z\d]{1,30}$/)) {
+            submitButton.disabled = false;
+            nameInput.classList.remove('invalid');
+        } else {
+            submitButton.disabled = true;
+            nameInput.classList.add('invalid');
+        }
+    });
+    overlayElement.appendChild(gameOverContainer);
+}
+
+document.addEventListener('keydown', (e) => player.keyHandler(e, true));
+document.addEventListener('keyup', (e) => player.keyHandler(e, false));
+startButton.addEventListener('click', () => {
+    overlayElement.classList.remove('tint');
+    overlayElement.innerText = '';
+    gameLoop();
+});

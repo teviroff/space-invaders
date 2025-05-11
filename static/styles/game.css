@@ -8,3 +8,67 @@
 .control-container img {
     height: 24px;
 }
+
+#game-container {
+    position: relative;
+    width: fit-content;
+}
+
+#game-canvas {
+    margin-top: 20px;
+    background-color: #404040;
+    border: 1px solid #505050;
+}
+
+#game-score {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#game-stage {
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+#game-overlay-container {
+    position: absolute;
+    top: 20px;
+    width: 600px;
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#game-overlay-container.tint {
+    background-color: rgba(0, 0, 0, .2);
+}
+
+#game-start-button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+#game-over-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+#game-over-container button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+#game-over-container button[disabled] {
+    color: #ddd;
+    cursor: not-allowed;
+}

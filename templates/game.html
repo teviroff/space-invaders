@@ -9,6 +9,14 @@
 
 {% block content %}
 <h1 class="text-white">Game</h1>
+<div id="game-container">
+    <canvas id="game-canvas" width="600" height="400"></canvas>
+    <p id="game-score" class="text-white text-bolder">Score: 0</p>
+    <p id="game-stage" class="text-white text-bolder">Stage: 1</p>
+    <div id="game-overlay-container" class="tint">
+        <button id="game-start-button" class="text-href text-bolder">Start</button>
+    </div>
+</div>
 <div id="controls-container">
     <span class="control-container">
         <p class="text-white text-bolder">Move left:</p>
@@ -24,10 +32,9 @@
         <p class="text-white text-bolder">Shoot:</p>
         <img src="/static/keys/Space.png">
     </span>
-</div>
-<canvas id="gameCanvas" width="600" height="400"></canvas>
-{% endblock %}
+    </div>
+    {% endblock %}
 
-{% block scripts %}
-<script type="module" src="/static/scripts/game.js"></script>
-{% endblock %}
+    {% block scripts %}
+    <script type="module" src="/static/scripts/game.js"></script>
+    {% endblock %}
