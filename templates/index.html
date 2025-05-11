@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}About - Space Invaders{% endblock %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="/static/styles/index.css">
+{% endblock %}
+
+{% block content %}
+<h1 class="text-white">Space Invaders</h1>
+<div id="about-container">
+    <h2 class="text-white section-header">About</h2>
+    <p class="text-white">
+        This website is an educational project for frontend course at HSSE.
+        It contains my interpretation of arcade game "Space Invaders".
+        Project documentation and source can be found in this 
+        <a class="text-href" href="https://github.com/teviroff/space-invaders">repo</a>.
+    </p>
+</div>
+{% endblock %}

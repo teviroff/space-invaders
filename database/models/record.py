@@ -1,5 +1,6 @@
 from typing import (
     Annotated,
+    Any,
     Self,
 )
 from datetime import (
@@ -25,6 +26,13 @@ class Record(mongo.Document):
     @classmethod
     def create(cls, model: 'CreateModel') -> Self:
         return Record(username=model.username, score=model.score).save()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            'username': self.username,
+            'score': self.score,
+            'timestamp': str(self.timestamp),
+        }
 
 
 class CreateModel(pydantic.BaseModel):

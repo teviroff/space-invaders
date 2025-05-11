@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Scoreboard - Space Invaders{% endblock %}
+
+{% block head%}
+{{ super() }}
+<link rel="stylesheet" href="/static/styles/scoreboard.css">
+{% endblock %}
+
+{% block content %}
+<h1 class="text-white">Scoreboard</h1>
+<div id="scoreboard-container">
+    <table id="scoreboard">
+        <thead id="scoreboard-header">
+            <tr>
+                <th>#</th>
+                <th>Username</th>
+                <th>Score</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody id="scoreboard-body"></tbody>
+    </table>
+    <div id="scoreboard-controls-container">
+        <select id="sorting-select">
+            <option value="score_desc" selected>Highest score</option>
+            <option value="score_asc">Lowest score</option>
+            <option value="date_desc">Newest</option>
+            <option value="date_asc">Oldest</option>
+        </select>
+        <button id="prev-page-button" class="page-button" disabled>
+            <img src="/static/img/arrow.png" style="transform: rotate(180deg);">
+        </button>
+        <button id="next-page-button" class="page-button">
+            <img src="/static/img/arrow.png">
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/scripts/scoreboard.js"></script>
+{% endblock %}

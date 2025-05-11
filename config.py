@@ -1,14 +1,17 @@
 # ===== App config =====
 
-HOST: str = 'localhost'
+HOST: str = '127.0.0.1'
 PORT: int = 8001
 
 from fastapi import FastAPI  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.templating import Jinja2Templates  # noqa: E402
 
 app = FastAPI()
 
 app.mount('/static', StaticFiles(directory='static'), name='static')
+
+templates = Jinja2Templates(directory='templates')
 
 # ===== Database config =====
 

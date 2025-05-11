@@ -7,6 +7,7 @@ const __dirname = path.dirname(__filename);
 export default {
     entry: {
         game: './src/game.ts',
+        scoreboard: './src/scoreboard.ts',
     },
     module: {
         rules: [

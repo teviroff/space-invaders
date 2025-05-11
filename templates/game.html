@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Game - Space Invaders{% endblock %}
+
+{% block head%}
+{{ super() }}
+<link rel="stylesheet" href="/static/styles/game.css">
+{% endblock %}
+
+{% block content %}
+<h1 class="text-white">Game</h1>
+<div id="controls-container">
+    <span class="control-container">
+        <p class="text-white text-bolder">Move left:</p>
+        <img src="/static/keys/A.png">
+        <img src="/static/keys/LeftArrow.png">
+    </span>
+    <span class="control-container">
+        <p class="text-white text-bolder">Move right:</p>
+        <img src="/static/keys/D.png">
+        <img src="/static/keys/RightArrow.png">
+    </span>
+    <span class="control-container">
+        <p class="text-white text-bolder">Shoot:</p>
+        <img src="/static/keys/Space.png">
+    </span>
+</div>
+<canvas id="gameCanvas" width="600" height="400"></canvas>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/scripts/game.js"></script>
+{% endblock %}

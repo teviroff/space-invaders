@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+    {% block head %}
+    <title>{% block title %}{% endblock %}</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="/static/styles/base.css">
+    {% endblock %}
+</head>
+
+<body>
+    <nav id="nav-content-container">
+        <div id="nav-head-container">
+            <img src="/static/assets/favicon.png" style="margin-left: -5px;">
+            <div>
+                <h2 class="text-white">Space Invaders</h2>
+                <p class="text-grey" style="font-weight: bold;">by teviroff</p>
+            </div>
+        </div>
+        <a class="text-href text-bolder" href="https://github.com/teviroff/space-invaders"
+            style="margin-top: -10px; width: fit-content;">
+            Project on GitHub
+        </a>
+        <div id="nav-items-container">
+            <h3 class="text-white">Navigation</h3>
+            <ul id="nav-items-list">
+                <li class="nav-item">
+                    <a class="text-href text-bolder" href="/">About</a>
+                </li>
+                <li class="nav-item">
+                    <a class="text-href text-bolder" href="/game">Game</a>
+                </li>
+                <li class="nav-item">
+                    <a class="text-href text-bolder" href="/scoreboard">Scoreboard</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div id="content-container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+
+{% block scripts %}
+{% endblock %}
+
+</html>

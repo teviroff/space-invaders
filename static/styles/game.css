@@ -1,0 +1,10 @@
+.control-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+}
+
+.control-container img {
+    height: 24px;
+}

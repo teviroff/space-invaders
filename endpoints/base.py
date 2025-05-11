@@ -1,5 +1,9 @@
-from config import app
+from config import (
+    app,
+    templates,
+)
 
 __all__ = [
     'app',
+    'templates',
 ]
